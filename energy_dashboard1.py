@@ -57,4 +57,4 @@ st.plotly_chart(fig_device, use_container_width=True)
 
 # Footer
 st.markdown("---")
-st.caption("Developed by Alloys • Agentic AI for Energy Monitoring • 2025")
+st.caption("Developed by ArtifexLabs • Agentic AI for Energy Monitoring • 2025")
