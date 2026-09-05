@@ -89,6 +89,43 @@ data/                       Bundled sample telemetry
 Business logic lives in `src/voltsentinel/` and is import-safe without Streamlit,
 which is what makes it testable — `app.py` only wires widgets to it.
 
+## Deploying
+
+The app is a **persistent Python server**, not a static site: the browser holds
+an open WebSocket to `/_stcore/stream`, and every slider move re-scores the
+fleet in a live Python process. That rules out serverless/edge hosts such as
+Vercel, Netlify and Cloudflare Pages, which do not hold WebSocket connections —
+the app would build there and then hang on "Please wait...". Deploy it anywhere
+that runs a long-lived process.
+
+### Streamlit Community Cloud (free, no extra config)
+
+The repo is deploy-ready as-is — `app.py` at the root, `requirements.txt`
+alongside it, and no build step:
+
+1. Push to GitHub (this repo already is).
+2. Sign in to <https://share.streamlit.io> with the GitHub account that owns
+   the repo.
+3. Create a new app pointing at this repository, branch `main`, main file
+   `app.py`.
+4. Deploy. First boot takes a couple of minutes while dependencies install.
+
+`app.py` puts `src/` on `sys.path` itself, so the package resolves without
+`pip install -e .` — verified by installing **only** `requirements.txt` into a
+clean environment and rendering every tab. If the host offers a Python version
+choice, pick one CI covers (3.10 or 3.12).
+
+### Any container host (Render, Fly.io, Railway, Cloud Run)
+
+No Dockerfile is committed, but the run command is a one-liner if you add one:
+
+```bash
+streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+```
+
+Bind to `0.0.0.0` and read the port from the platform's `$PORT` variable, or the
+health check will never pass.
+
 ## Bring your own data
 
 Upload any CSV carrying these columns:
