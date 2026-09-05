@@ -1,0 +1,15 @@
+# The chart palette is validated against a light surface, so pin the theme
+# rather than letting it follow the viewer's OS setting.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f9f9f7"
+textColor = "#0b0b0b"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
