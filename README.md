@@ -46,7 +46,7 @@ kind, so a fault that hides from one is caught by another.
 |---|---|---|
 | **Engineering rules** | A device reporting `OFF` while still drawing power; supply voltage outside its acceptable band | Encodes what a technician would spot by eye. Zero false-positive tolerance, fully explainable. |
 | **Robust z-score** | A reading far from the norm **for its own device type** | Uses median/MAD rather than mean/σ, so the outlier it is hunting does not inflate the spread it is measured against. A server rack is compared to server racks, never to lighting. |
-| **Isolation Forest** | Odd *combinations* — normal load at an abnormal hour, normal voltage at an abnormal load | Learns the fleet's joint distribution over usage, voltage, time-of-day (encoded cyclically) and on/off state. Catches what no single-column threshold can. |
+| **Isolation Forest** | Odd *combinations* — normal load at an abnormal hour, normal voltage at an abnormal load | Learns the fleet's joint distribution over usage, voltage and time-of-day (encoded cyclically). Catches what no single-column threshold can. On/off state is deliberately **not** a feature: it is a rare binary that scales several sigma out, so the forest would isolate every OFF reading in one split and just rediscover `status == "OFF"`. Phantom loads are the rule detector's job. |
 
 Results are blended into an `anomaly_score` (0–1): 60% Isolation Forest score,
 40% how many detectors agree — so a reading that trips three checks outranks one
@@ -88,6 +88,43 @@ data/                       Bundled sample telemetry
 
 Business logic lives in `src/voltsentinel/` and is import-safe without Streamlit,
 which is what makes it testable — `app.py` only wires widgets to it.
+
+## Deploying
+
+The app is a **persistent Python server**, not a static site: the browser holds
+an open WebSocket to `/_stcore/stream`, and every slider move re-scores the
+fleet in a live Python process. That rules out serverless/edge hosts such as
+Vercel, Netlify and Cloudflare Pages, which do not hold WebSocket connections —
+the app would build there and then hang on "Please wait...". Deploy it anywhere
+that runs a long-lived process.
+
+### Streamlit Community Cloud (free, no extra config)
+
+The repo is deploy-ready as-is — `app.py` at the root, `requirements.txt`
+alongside it, and no build step:
+
+1. Push to GitHub (this repo already is).
+2. Sign in to <https://share.streamlit.io> with the GitHub account that owns
+   the repo.
+3. Create a new app pointing at this repository, branch `main`, main file
+   `app.py`.
+4. Deploy. First boot takes a couple of minutes while dependencies install.
+
+`app.py` puts `src/` on `sys.path` itself, so the package resolves without
+`pip install -e .` — verified by installing **only** `requirements.txt` into a
+clean environment and rendering every tab. If the host offers a Python version
+choice, pick one CI covers (3.10 or 3.12).
+
+### Any container host (Render, Fly.io, Railway, Cloud Run)
+
+No Dockerfile is committed, but the run command is a one-liner if you add one:
+
+```bash
+streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+```
+
+Bind to `0.0.0.0` and read the port from the platform's `$PORT` variable, or the
+health check will never pass.
 
 ## Bring your own data
 

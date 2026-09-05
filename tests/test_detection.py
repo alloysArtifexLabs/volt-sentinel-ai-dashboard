@@ -75,9 +75,31 @@ def test_zscore_is_computed_per_device_type(frame: pd.DataFrame, config: Setting
 
 def test_cyclic_hour_features_wrap_around(frame: pd.DataFrame) -> None:
     features = build_features(frame)
-    assert set(features.columns) == {"usage_kwh", "voltage", "hour_sin", "hour_cos", "is_on"}
+    assert set(features.columns) == {"usage_kwh", "voltage", "hour_sin", "hour_cos"}
     magnitudes = np.hypot(features["hour_sin"], features["hour_cos"])
     np.testing.assert_allclose(magnitudes, 1.0, atol=1e-9)
+
+
+def test_features_exclude_on_off_state(frame: pd.DataFrame) -> None:
+    # A rare binary scales to several sigma — further out than any real load or
+    # voltage excursion — so including it would let the forest isolate every
+    # OFF reading in one split. Status is the rule detector's job.
+    assert "is_on" not in build_features(frame).columns
+
+
+def test_isolation_forest_is_not_just_a_status_detector(bundled: pd.DataFrame) -> None:
+    """Regression: the forest once flagged 26 OFF rows and zero ON rows, so
+    deselecting OFF in the dashboard reported no anomalies across 771 readings."""
+    result = detect(bundled)
+    flagged = result[result["iforest_flag"] == 1]
+    assert not flagged.empty
+    # Most readings are ON, so most flags should be too.
+    assert (flagged["status"] == "ON").sum() > (flagged["status"] != "ON").sum()
+
+    on_only = result[result["status"] == "ON"]
+    assert on_only["detected_anomaly"].sum() > 0, (
+        "filtering to ON-only devices must not zero out the anomaly count"
+    )
 
 
 def test_isolation_forest_scores_are_normalised(frame: pd.DataFrame, config: Settings) -> None:
