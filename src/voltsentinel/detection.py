@@ -11,7 +11,9 @@ Three complementary detectors run over every reading:
     rack is compared against other server racks rather than against lighting.
 ``iforest``
     An Isolation Forest over usage, voltage and cyclic time-of-day features,
-    which catches combinations no single-column threshold would.
+    which catches combinations no single-column threshold would. It sees only
+    continuous signal: on/off state is deliberately excluded (see
+    ``build_features``).
 
 Each detector contributes to ``anomaly_score`` (0-1), and ``detected_anomaly``
 is set when any of them fires.
@@ -26,7 +28,7 @@ from sklearn.preprocessing import StandardScaler
 
 from voltsentinel.config import Settings, settings
 
-FEATURE_COLUMNS = ["usage_kwh", "voltage", "hour_sin", "hour_cos", "is_on"]
+FEATURE_COLUMNS = ["usage_kwh", "voltage", "hour_sin", "hour_cos"]
 
 #: Human-readable explanation for each detector, surfaced in the UI.
 DETECTOR_LABELS: dict[str, str] = {
@@ -38,7 +40,17 @@ DETECTOR_LABELS: dict[str, str] = {
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Turn raw readings into the numeric matrix the model consumes."""
+    """Turn raw readings into the numeric matrix the model consumes.
+
+    Only continuous signal goes in. On/off state is deliberately excluded: it
+    is a rare binary (roughly 8% of readings are OFF), so once scaled it lands
+    several sigma from the centroid — further out than any genuine load or
+    voltage excursion reaches. The forest would isolate every OFF reading in a
+    single split and spend its whole contamination budget there, rediscovering
+    ``status == "OFF"`` instead of finding unusual energy behaviour, and
+    reporting zero anomalies whenever OFF readings are filtered out. Phantom
+    loads are caught explicitly by :func:`rule_flags` instead.
+    """
     hour = df["timestamp"].dt.hour + df["timestamp"].dt.minute / 60.0
     features = pd.DataFrame(index=df.index)
     features["usage_kwh"] = df["usage_kwh"].astype(float)
@@ -46,7 +58,6 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     # Encode the clock as a circle so 23:00 and 00:00 sit next to each other.
     features["hour_sin"] = np.sin(2 * np.pi * hour / 24.0)
     features["hour_cos"] = np.cos(2 * np.pi * hour / 24.0)
-    features["is_on"] = (df["status"] == "ON").astype(float)
     return features[FEATURE_COLUMNS]
 
 

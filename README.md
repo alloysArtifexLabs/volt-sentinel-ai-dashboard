@@ -46,7 +46,7 @@ kind, so a fault that hides from one is caught by another.
 |---|---|---|
 | **Engineering rules** | A device reporting `OFF` while still drawing power; supply voltage outside its acceptable band | Encodes what a technician would spot by eye. Zero false-positive tolerance, fully explainable. |
 | **Robust z-score** | A reading far from the norm **for its own device type** | Uses median/MAD rather than mean/σ, so the outlier it is hunting does not inflate the spread it is measured against. A server rack is compared to server racks, never to lighting. |
-| **Isolation Forest** | Odd *combinations* — normal load at an abnormal hour, normal voltage at an abnormal load | Learns the fleet's joint distribution over usage, voltage, time-of-day (encoded cyclically) and on/off state. Catches what no single-column threshold can. |
+| **Isolation Forest** | Odd *combinations* — normal load at an abnormal hour, normal voltage at an abnormal load | Learns the fleet's joint distribution over usage, voltage and time-of-day (encoded cyclically). Catches what no single-column threshold can. On/off state is deliberately **not** a feature: it is a rare binary that scales several sigma out, so the forest would isolate every OFF reading in one split and just rediscover `status == "OFF"`. Phantom loads are the rule detector's job. |
 
 Results are blended into an `anomaly_score` (0–1): 60% Isolation Forest score,
 40% how many detectors agree — so a reading that trips three checks outranks one
